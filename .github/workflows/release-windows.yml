@@ -1,0 +1,99 @@
+name: Release Windows
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# The release/upload steps use the built-in GITHUB_TOKEN to create releases
+# and upload assets, which requires write access to repo contents. Without
+# this the gh API calls fail with "HTTP 403: Resource not accessible by
+# integration" when the repo's default workflow permissions are read-only.
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Windows installer
+        # -p never: build only, do NOT let electron-builder auto-publish.
+        # The publish config in package.json would otherwise make it require
+        # GH_TOKEN and fail; the release + asset upload is handled by the
+        # explicit steps below using the built-in GITHUB_TOKEN.
+        run: npx electron-builder -w -p never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Prepare latest.yml for auto-update
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          EXE_PATH=$(ls -1 dist/*Setup-${VERSION}.exe | head -n1 || true)
+          if [ -z "${EXE_PATH}" ] || [ ! -f "${EXE_PATH}" ]; then
+            echo "Windows EXE not found for version ${VERSION}" >&2
+            ls -la dist || true
+            exit 1
+          fi
+          EXE_FILE=$(basename "$EXE_PATH")
+          SIZE=$(node -e "console.log(require('fs').statSync(process.argv[1]).size)" "$EXE_PATH")
+          SHA512=$(node -e "const fs=require('fs');const crypto=require('crypto');const d=fs.readFileSync(process.argv[1]);console.log(crypto.createHash('sha512').update(d).digest('base64'))" "$EXE_PATH")
+          mkdir -p dist
+          cat > dist/latest.yml <<YAML
+          version: ${VERSION}
+          files:
+            - url: ${EXE_FILE}
+              sha512: ${SHA512}
+              size: ${SIZE}
+          path: ${EXE_FILE}
+          sha512: ${SHA512}
+          releaseDate: '$(date -u +%Y-%m-%dT%H:%M:%SZ)'
+          YAML
+          echo "Wrote dist/latest.yml"
+
+      - name: Create or update GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v${VERSION}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists; will upload assets."
+          else
+            gh release create "$TAG" -t "$TAG" -n "Automated Windows release for $TAG"
+          fi
+
+      - name: Upload assets to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v${VERSION}"
+          EXE_PATH=$(ls -1 dist/*Setup-${VERSION}.exe | head -n1 || true)
+          BLOCKMAP_PATH="${EXE_PATH}.blockmap"
+          ASSETS=()
+          [ -f "$EXE_PATH" ] && ASSETS+=("$EXE_PATH")
+          [ -f "$BLOCKMAP_PATH" ] && ASSETS+=("$BLOCKMAP_PATH")
+          [ -f "dist/latest.yml" ] && ASSETS+=("dist/latest.yml")
+          if [ ${#ASSETS[@]} -eq 0 ]; then
+            echo "No assets found to upload" >&2
+            exit 1
+          fi
+          gh release upload "$TAG" "${ASSETS[@]}" --clobber

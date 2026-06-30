@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Printer Driver Setup</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: rgba(0, 0, 0, 0.9);
+      color: #fff;
+    }
+    .container {
+      width: 560px;
+      max-width: 92vw;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 10px;
+      padding: 26px;
+    }
+    .header { text-align: center; margin-bottom: 18px; }
+    .title { font-size: 22px; margin: 0 0 8px; color: #f0f0f0; }
+    .subtitle { font-size: 14px; color: #aaa; }
+    .card {
+      background: #111;
+      border: 1px solid #2b2b2b;
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 14px;
+    }
+    .list { margin: 12px 0 0; padding-left: 18px; color: #ccc; }
+    .list li { margin: 6px 0; }
+    .warn { color: #ffd166; font-size: 13px; margin-top: 10px; }
+    .buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .btn {
+      border: none;
+      border-radius: 6px;
+      padding: 12px 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform .05s ease, opacity .2s ease;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary { background: #0ea5e9; color: #001018; }
+    .btn-success { background: #22c55e; color: #031006; }
+    .btn-neutral { background: #404040; color: #ededed; }
+    .muted { color: #a3a3a3; font-size: 12px; margin-top: 12px; text-align: center; }
+    #status { margin-top: 12px; font-size: 13px; }
+    #status.ok { color: #51cf66; }
+    #status.err { color: #ff6b6b; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 class="title">🖨️ Printer Driver Setup</h1>
+      <p class="subtitle">AURES Elite Printer driver (Windows)</p>
+    </div>
+
+    <div class="card">
+      <div id="platformNote" class="warn" style="display:none"></div>
+      <p>Would you like to install the AURES Elite receipt printer drivers now?</p>
+      <ul class="list">
+        <li>If you already installed the driver, choose <strong>Already Installed</strong>.</li>
+        <li>Otherwise choose <strong>Install Driver</strong> to launch the installer.</li>
+        <li>You can also <strong>Skip for now</strong> and install later.</li>
+      </ul>
+      <div id="status" class="muted"></div>
+      <div class="buttons">
+        <button id="installBtn" class="btn btn-primary">Install Driver</button>
+        <button id="installedBtn" class="btn btn-success">Already Installed</button>
+        <button id="skipBtn" class="btn btn-neutral">Skip for now</button>
+      </div>
+      <div class="muted">You can reopen this from the admin panel if needed.</div>
+    </div>
+  </div>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const noteEl = document.getElementById('platformNote');
+    const installBtn = document.getElementById('installBtn');
+    const installedBtn = document.getElementById('installedBtn');
+    const skipBtn = document.getElementById('skipBtn');
+
+    function setStatus(text, type='') {
+      statusEl.textContent = text || '';
+      statusEl.className = type ? type : '';
+    }
+
+    async function init() {
+      try {
+        const s = await window.electronAPI.getDriverStatus();
+        if (!s) return;
+        if (s.platform !== 'win32') {
+          noteEl.style.display = 'block';
+          noteEl.textContent = 'This driver is only needed for Windows. This prompt will not appear on macOS or Linux.';
+          installBtn.disabled = true;
+        }
+        if (!s.installerPathExists && s.platform === 'win32') {
+          setStatus('Installer not found in package. Please contact support.', 'err');
+          installBtn.disabled = true;
+        }
+      } catch (e) {
+        setStatus('Failed to read driver status', 'err');
+      }
+    }
+
+    installBtn.addEventListener('click', async () => {
+      setStatus('Launching driver installer...', '');
+      const res = await window.electronAPI.installPrinterDriver();
+      if (res && res.ok) {
+        setStatus('Installer launched. Follow the on-screen steps. Marking as installed...', 'ok');
+        await window.electronAPI.markDriverInstalled();
+        setTimeout(() => window.electronAPI.closeDriverSetup(), 800);
+      } else {
+        setStatus(`Failed to launch installer${res && res.error ? ': ' + res.error : ''}`, 'err');
+      }
+    });
+
+    installedBtn.addEventListener('click', async () => {
+      await window.electronAPI.markDriverInstalled();
+      setTimeout(() => window.electronAPI.closeDriverSetup(), 200);
+    });
+
+    skipBtn.addEventListener('click', async () => {
+      await window.electronAPI.markDriverPromptSeen();
+      setTimeout(() => window.electronAPI.closeDriverSetup(), 200);
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') window.electronAPI.closeDriverSetup();
+    });
+
+    init();
+  </script>
+</body>
+</html>

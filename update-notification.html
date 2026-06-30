@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Update Available</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: rgba(0, 0, 0, 0.9);
+            color: #fff;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .update-container {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 30px;
+            width: 450px;
+            max-width: 90vw;
+            text-align: center;
+        }
+        
+        .update-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        
+        .update-title {
+            font-size: 24px;
+            margin-bottom: 15px;
+            color: #f0f0f0;
+        }
+        
+        .update-message {
+            color: #ccc;
+            margin-bottom: 25px;
+            line-height: 1.5;
+        }
+        
+        .version-info {
+            background: #2a2a2a;
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 20px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        
+        .progress-container {
+            display: none;
+            margin-bottom: 20px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #333;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: #007acc;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-text {
+            margin-top: 8px;
+            font-size: 14px;
+            color: #ccc;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 25px;
+        }
+        
+        .btn {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        
+        .btn-download {
+            background: #007acc;
+            color: white;
+        }
+        
+        .btn-download:hover {
+            background: #005a99;
+        }
+        
+        .btn-download:disabled {
+            background: #444;
+            cursor: not-allowed;
+        }
+        
+        .btn-install {
+            background: #28a745;
+            color: white;
+            display: none;
+        }
+        
+        .btn-install:hover {
+            background: #218838;
+        }
+        
+        .btn-later {
+            background: #444;
+            color: #ccc;
+        }
+        
+        .btn-later:hover {
+            background: #555;
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="update-container">
+        <div class="update-icon">🔄</div>
+        <h1 class="update-title">Update Available</h1>
+        <p class="update-message">A new version of Waveflow POS is available.</p>
+        
+        <div class="version-info" id="versionInfo">
+            Checking version...
+        </div>
+        
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-text" id="progressText">Downloading...</div>
+        </div>
+        
+        <div class="button-group">
+            <button class="btn btn-later" onclick="closeUpdate()">Later</button>
+            <button class="btn btn-download" id="downloadBtn" onclick="downloadUpdate()">Download Update</button>
+            <button class="btn btn-install hidden" id="installBtn" onclick="installUpdate()">Install & Restart</button>
+        </div>
+    </div>
+
+    <script>
+        let updateInfo = null;
+
+        // Listen for update events from main process
+        window.addEventListener('DOMContentLoaded', () => {
+            // Get update info from main process
+            window.electronAPI.getUpdateInfo().then(info => {
+                if (info) {
+                    updateInfo = info;
+                    document.getElementById('versionInfo').textContent = `Version ${info.version} is ready to download`;
+                }
+            });
+        });
+
+        // Listen for progress updates
+        if (window.electronAPI.onDownloadProgress) {
+            window.electronAPI.onDownloadProgress((progress) => {
+                updateDownloadProgress(progress);
+            });
+        }
+
+        // Listen for download complete
+        if (window.electronAPI.onUpdateDownloaded) {
+            window.electronAPI.onUpdateDownloaded(() => {
+                showInstallButton();
+            });
+        }
+
+        async function downloadUpdate() {
+            const downloadBtn = document.getElementById('downloadBtn');
+            const progressContainer = document.getElementById('progressContainer');
+            
+            downloadBtn.disabled = true;
+            downloadBtn.textContent = 'Downloading...';
+            progressContainer.style.display = 'block';
+            
+            try {
+                const result = await window.electronAPI.downloadUpdate();
+                if (!result) {
+                    downloadBtn.disabled = false;
+                    downloadBtn.textContent = 'Download Failed - Retry';
+                    progressContainer.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Download error:', error);
+                downloadBtn.disabled = false;
+                downloadBtn.textContent = 'Download Failed - Retry';
+                progressContainer.style.display = 'none';
+            }
+        }
+
+        function updateDownloadProgress(progress) {
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+            
+            const percent = Math.round(progress.percent);
+            progressFill.style.width = `${percent}%`;
+            progressText.textContent = `Downloading... ${percent}%`;
+        }
+
+        function showInstallButton() {
+            const downloadBtn = document.getElementById('downloadBtn');
+            const installBtn = document.getElementById('installBtn');
+            const progressText = document.getElementById('progressText');
+            
+            downloadBtn.style.display = 'none';
+            installBtn.style.display = 'block';
+            installBtn.classList.remove('hidden');
+            progressText.textContent = 'Download complete!';
+        }
+
+        async function installUpdate() {
+            await window.electronAPI.installUpdate();
+        }
+
+        function closeUpdate() {
+            window.electronAPI.closeUpdate();
+        }
+
+        // Close on escape key
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeUpdate();
+            }
+        });
+    </script>
+</body>
+</html>

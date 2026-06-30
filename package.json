@@ -1,6 +1,6 @@
 {
   "name": "waveflow-pos",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Waveflow POS Electron wrapper",
   "main": "main.js",
   "homepage": "https://github.com/carsonmiller31/waveflow-pos-kiosk",
@@ -14,7 +14,6 @@
     "build:mac": "electron-builder -m",
     "build:linux": "electron-builder -l",
     "build:all": "electron-builder -mwl",
-    
     "dist": "npm run build",
     "postinstall": "electron-builder install-app-deps",
     "clean": "rimraf dist",

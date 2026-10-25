@@ -41,6 +41,8 @@
       "admin-panel.html",
       "driver-setup.html",
       "update-notification.html",
+      "assets/icon.png",
+      "assets/icon-dark.png",
       "package.json"
     ],
     "win": {

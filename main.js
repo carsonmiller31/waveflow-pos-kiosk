@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, globalShortcut, session } = require('electron');
+const { app, BrowserWindow, ipcMain, globalShortcut, session, nativeImage, nativeTheme } = require('electron');
 let autoUpdater; // lazily required after app context is ready
 const SettingsManager = require('./settings');
 const path = require('path');
@@ -346,7 +346,23 @@ function showUpdateWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+// Dark mode for the Dock icon on a Mac, as Waveflow Code does it. An .icns holds one image, so the Dock is set
+// at runtime from the two plates in assets/ (packed into the asar, which nativeImage reads directly). Windows,
+// where the kiosk actually runs, keeps the .ico.
+function followSystemAppearance() {
+  if (process.platform !== 'darwin' || !app.dock) return;
+  const apply = () => {
+    const image = nativeImage.createFromPath(path.join(__dirname, 'assets', nativeTheme.shouldUseDarkColors ? 'icon-dark.png' : 'icon.png'));
+    if (!image.isEmpty()) app.dock.setIcon(image);
+  };
+  apply();
+  nativeTheme.on('updated', apply);
+}
+
+app.whenReady().then(() => {
+  followSystemAppearance();
+  createWindow();
+});
 
 // SIMPLE PRINT HANDLER
 ipcMain.handle('print', async (event, htmlContent) => {

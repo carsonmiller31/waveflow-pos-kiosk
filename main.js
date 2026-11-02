@@ -23,8 +23,7 @@ function createWindow() {
   
   // Set app to launch at startup
   app.setLoginItemSettings({
-    openAtLogin: true,
-    openAsHidden: false
+    openAtLogin: true
   });
   
   mainWindow = new BrowserWindow({

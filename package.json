@@ -148,12 +148,12 @@
   "author": "Waveflow",
   "type": "commonjs",
   "dependencies": {
-    "electron-updater": "^6.6.2"
+    "electron-updater": "^6.8.11"
   },
   "devDependencies": {
-    "electron": "^38.2.2",
-    "electron-builder": "^26.0.12",
-    "electron-rebuild": "^3.2.9",
+    "@electron/rebuild": "^4.2.1",
+    "electron": "^44.10.1",
+    "electron-builder": "^26.18.0",
     "rimraf": "^5.0.5"
   }
 }
